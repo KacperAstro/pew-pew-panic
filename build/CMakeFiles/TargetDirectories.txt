@@ -1,3 +1,0 @@
-/home/astro/Desktop/coding-projects/cpp-projects/ui-test/build/CMakeFiles/infa.dir
-/home/astro/Desktop/coding-projects/cpp-projects/ui-test/build/CMakeFiles/edit_cache.dir
-/home/astro/Desktop/coding-projects/cpp-projects/ui-test/build/CMakeFiles/rebuild_cache.dir
