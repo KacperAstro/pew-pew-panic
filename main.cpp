@@ -136,8 +136,8 @@ struct Bullet {
     sf::RectangleShape shape;
 };
 
-struct Block {
-    sf::RectangleShape shape;
+struct Ship {
+    sf::ConvexShape shape;
     int lives = 1;
     int maxLives = 1;
 
@@ -158,10 +158,31 @@ struct Block {
             shape.setFillColor(sf::Color::Red);
         }
     }
+
+    void setShape() {
+        sf::ConvexShape convex(12);
+        // 50 x 20
+        convex.setPoint(0, sf::Vector2f(10, 0));
+        convex.setPoint(1, sf::Vector2f(0, -5));
+        convex.setPoint(2, sf::Vector2f(0, -10));
+        convex.setPoint(3, sf::Vector2f(10, -10));
+        convex.setPoint(4, sf::Vector2f(10, -15));
+        convex.setPoint(5, sf::Vector2f(15, -20));
+        convex.setPoint(6, sf::Vector2f(35, -20));
+        convex.setPoint(7, sf::Vector2f(40, -15));
+        convex.setPoint(8, sf::Vector2f(40, -10));
+        convex.setPoint(9, sf::Vector2f(50, -10));
+        convex.setPoint(10, sf::Vector2f(50, -5));
+        convex.setPoint(11, sf::Vector2f(40, 0));
+
+        // convex.setOrigin(sf::Vector2f(50. / 2., 20. / 2.));
+
+        shape = convex;
+    }
 };
 
 struct House {
-    sf::RectangleShape shape;
+    sf::ConvexShape shape;
     int lives = 8;
     int maxLives = 8;
 
@@ -182,10 +203,27 @@ struct House {
             shape.setFillColor(sf::Color::Red);
         }
     }
+
+    void setShape() {
+        sf::ConvexShape convex(8);
+        convex.setPoint(0, sf::Vector2f(0, 0));
+        convex.setPoint(1, sf::Vector2f(0, -30));
+        convex.setPoint(2, sf::Vector2f(50, -30));
+        convex.setPoint(3, sf::Vector2f(50, 0));
+        convex.setPoint(4, sf::Vector2f(40, 0));
+        convex.setPoint(5, sf::Vector2f(40, -10));
+        convex.setPoint(6, sf::Vector2f(10, -10));
+        convex.setPoint(7, sf::Vector2f(10, 0));
+
+        // convex.setOrigin(sf::Vector2f(50. / 2., 30. / 2.));
+        // 50 x 30
+
+        shape = convex;
+    }
 };
 
 struct Player {
-    sf::RectangleShape shape;
+    sf::ConvexShape shape;
     float speed;
 
     int currentLives = 3;
@@ -195,6 +233,19 @@ struct Player {
     bool isAlive = true;
     float respawnTimer = 0.0f;
     static constexpr float respawnDelay = 5.0f; // 5 seconds for respawn
+
+    void setShape() {
+        sf::ConvexShape convex(6);
+        convex.setPoint(0, sf::Vector2f(0, 0));
+        convex.setPoint(1, sf::Vector2f(0, -10));
+        convex.setPoint(2, sf::Vector2f(15, -30));
+        convex.setPoint(3, sf::Vector2f(40, -30));
+        convex.setPoint(4, sf::Vector2f(55, -10));
+        convex.setPoint(5, sf::Vector2f(55, 0));
+        convex.setOrigin(sf::Vector2f(55. / 2., -30. / 2.));
+
+        shape = convex;
+    }
 
     void updateColor() {
         if (!isAlive) {
@@ -256,7 +307,7 @@ struct Player {
 
             // Bound player pos to screen borders
             sf::Vector2f playerPos = shape.getPosition();
-            sf::Vector2f playerSize = shape.getSize();
+            sf::Vector2f playerSize = sf::Vector2f(shape.getPoint(5).x, shape.getPoint(2).y);
             if (playerPos.x - playerSize.x / 2. < 0) {
                 shape.setPosition(sf::Vector2f(playerSize.x / 2., playerPos.y));
             }
@@ -269,7 +320,7 @@ struct Player {
 
 // Helper functions
 void centerBlockOnGrid(
-    std::vector<Block>& blocks, sf::RenderWindow& window,
+    std::vector<Ship>& ships, sf::RenderWindow& window,
     int gridColumns, int gridRows,
     float marginX, float marginY
 );
@@ -284,7 +335,7 @@ struct GameData {
     std::vector<Bullet> bullets;
     std::vector<Bullet> blockBullets;
 
-    std::vector<Block> blocks;
+    std::vector<Ship> ships;
     std::vector<House> houses;
 
     sf::Clock shootClock;
@@ -295,6 +346,9 @@ struct GameData {
 
     int score;
     int round;
+
+    float angle;
+    float orbitRadius;
 
     bool showPostRoundMenu;
     bool isPaused;
@@ -307,8 +361,9 @@ struct GameData {
         player.isAlive = true;
         isGameOver = false;
 
+        player.setShape();
         player.shape.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
-        player.shape.setOrigin(sf::Vector2f(30.0f, 10.0f));
+        player.speed = 250.f;
 
         player.updateColor();
         graceTimeClock.restart();
@@ -316,16 +371,20 @@ struct GameData {
         round = 1;
         score = 0;
 
+        angle = 0.0f;
+        orbitRadius = 150.0f;
+
         houses.clear();
-        blocks.clear();
+        ships.clear();
         bullets.clear();
         blockBullets.clear();
 
         int blockAmount = 50;
         for (int i = 0; i < blockAmount; i++) {
-            Block block{ sf::RectangleShape(sf::Vector2f(50, 20)) };
-            block.shape.setFillColor(sf::Color::White);
-            blocks.push_back(block);
+            Ship ship;
+            ship.setShape();
+            ship.shape.setFillColor(sf::Color::White);
+            ships.push_back(ship);
         }
 
         int gridCol = 10;
@@ -334,14 +393,15 @@ struct GameData {
         float marginY = 15;
 
         centerBlockOnGrid(
-            blocks, window,
+            ships, window,
             gridCol, gridRow,
             marginX, marginY
         );
 
         int houseAmount = 4;
         for (int i = 0; i < houseAmount; i++) {
-            House house{ sf::RectangleShape(sf::Vector2f(50, 30)) };
+            House house;
+            house.setShape();
             house.shape.setFillColor(sf::Color::White);
             houses.push_back(house);
         }
@@ -397,7 +457,8 @@ struct GameData {
             houses.clear();
             if (houseSize > 0) {
                 for (size_t i = 0; i < houseSize; i++) {
-                    House house{ sf::RectangleShape(sf::Vector2f(50, 30)) };
+                    House house;
+                    house.setShape();
 
                     sf::Vector2f pos(0.0, 0.0);
 
@@ -423,7 +484,8 @@ void playState(
 
 void mainMenuState(
     GameData& gameData, MainMenuState& mainState,
-    sf::Event& event, bool& isRunning
+    sf::Event& event, bool& isRunning,
+    float& dt, MenuState& menuState
 );
 
 void playAndLoadState(
@@ -438,14 +500,13 @@ sf::Text updateScoreText(const sf::Font& font, const int& score);
 
 int main() {
     sf::RenderWindow window(sf::VideoMode(WINDOW_SIZE.x, WINDOW_SIZE.y), "Window");
-    Player player{
-        sf::RectangleShape(sf::Vector2f(60.0f, 20.0f)),
-        250.0f,
-    };
     sf::Font font;
     if (!font.loadFromFile("arial.ttf")) return -1;
 
-    GameData gameData{ window, player };
+    // Gives error for some reason
+    // It says that there is not a default constructor
+    // for ConvexShape yet it compiles ?
+    GameData gameData{ window };
     gameData.font = font;
     gameData.make();
 
@@ -473,22 +534,11 @@ int main() {
         switch (menuState)
         {
         case Menu:
-            switch (mainState)
-            {
-            case MainMenu:
-                mainMenuState(
-                    gameData, mainState,
-                    event, isRunning
-                );
-                break;
-            case PlayAndLoad:
-                playAndLoadState(
-                    gameData, mainState,
-                    event, menuState
-                );
-                break;
-            }
-
+            mainMenuState(
+                gameData, mainState,
+                event, isRunning,
+                dt, menuState
+            );
             break;
         case Play:
             playState(gameData, event, dt, menuState);
@@ -513,7 +563,7 @@ void playState(
     roundText.setFillColor(sf::Color::Yellow);
     roundText.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2 - 50, WINDOW_SIZE.y / 10. - 50.));
 
-    if (gameData.blocks.empty() && !gameData.showPostRoundMenu) {
+    if (gameData.ships.empty() && !gameData.showPostRoundMenu) {
         gameData.showPostRoundMenu = true;
     }
 
@@ -524,7 +574,7 @@ void playState(
 
     // Testing purpose
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::B)) {
-        gameData.blocks.clear();
+        gameData.ships.clear();
     }
 
     if (!gameData.showPostRoundMenu && !gameData.isPaused && !gameData.isGameOver) {
@@ -542,20 +592,20 @@ void playState(
             }
         }
 
-        // Bullet deals damage to blocks
+        // Bullet deals damage to ships
         for (int bulletId = 0; bulletId < gameData.bullets.size();) {
             bool bulletHit = false;
-            for (int blockId = 0; blockId < gameData.blocks.size(); blockId++) {
+            for (int blockId = 0; blockId < gameData.ships.size(); blockId++) {
                 sf::FloatRect bulletBounds = gameData.bullets[bulletId].shape.getGlobalBounds();
-                sf::FloatRect blockBounds = gameData.blocks[blockId].shape.getGlobalBounds();
+                sf::FloatRect blockBounds = gameData.ships[blockId].shape.getGlobalBounds();
 
                 if (bulletBounds.intersects(blockBounds)) {
-                    if (gameData.blocks[blockId].lives <= 0) {
-                        gameData.blocks.erase(gameData.blocks.begin() + blockId);
+                    if (gameData.ships[blockId].lives <= 0) {
+                        gameData.ships.erase(gameData.ships.begin() + blockId);
                         gameData.score += 50;
                     } else {
-                        gameData.blocks[blockId].lives--;
-                        gameData.blocks[blockId].updateColor();
+                        gameData.ships[blockId].lives--;
+                        gameData.ships[blockId].updateColor();
                         gameData.score += 10;
                     }
                     bulletHit = true;
@@ -597,14 +647,14 @@ void playState(
         }
 
         // Add a bit of a grace time at the start of the round/game
-        std::vector<Block> shootableBlocks;
+        std::vector<Ship> shootableBlocks;
         if (gameData.graceTimeClock.getElapsedTime() > sf::seconds(1.)) {
-            // Get blocks that can shoot
-            for (auto& block : gameData.blocks) {
+            // Get ships that can shoot
+            for (auto& block : gameData.ships) {
                 sf::FloatRect blockBounds = block.shape.getGlobalBounds();
                 bool hasBlockBelow = false;
 
-                for (auto& otherBlock : gameData.blocks) {
+                for (auto& otherBlock : gameData.ships) {
                     if (&block == &otherBlock) continue;
 
                     sf::FloatRect otherBlockBounds = otherBlock.shape.getGlobalBounds();
@@ -623,19 +673,19 @@ void playState(
             }
         }
 
-        // Lower the time needed for blocks to shoot and move
+        // Lower the time needed for ships to shoot and move
         float harder;
-        if (gameData.blocks.size() > 2) {
-            harder = (5. / gameData.blocks.size()) + (gameData.round * 0.1f);
+        if (gameData.ships.size() > 2) {
+            harder = (5. / gameData.ships.size()) + (gameData.round * 0.1f);
         } else {
             harder = 1.3 + (gameData.round * 0.1f);
         }
 
         harder = std::min(harder, 1.5f);
 
-        // Move blocks
+        // Move ships
         if (gameData.moveClock.getElapsedTime() > sf::seconds(2.0 - harder)) {
-            for (auto& block : gameData.blocks) {
+            for (auto& block : gameData.ships) {
                 if (harder > 0.3) {
                     block.shape.move(sf::Vector2f(0.0, 3.0));
                 } else {
@@ -645,7 +695,7 @@ void playState(
             gameData.moveClock.restart();
         }
 
-        // Random amount of bullets are shoot by random amount of the blocks
+        // Random amount of bullets are shoot by random amount of the ships
         if (gameData.blockClock.getElapsedTime() > sf::seconds(3.0 - harder)) {
             std::vector<int> shootBlockId;
 
@@ -661,8 +711,6 @@ void playState(
                 int randAmount = rand() % (maxAmount - minAmount + 1) + minAmount;
                 int i = 0;
 
-                std::cout << randAmount << std::endl;
-
                 while (i < randAmount) {
                     int randInt = rand() % shootableBlocks.size();
 
@@ -675,11 +723,11 @@ void playState(
                 }
 
                 for (const auto& id : shootBlockId) {
-                    const Block& shootBlock = shootableBlocks[id];
+                    const Ship& shootBlock = shootableBlocks[id];
                     Bullet bullet{ sf::RectangleShape(sf::Vector2f(5, 15)) };
 
                     sf::Vector2f blockCenter = shootBlock.shape.getPosition() +
-                        sf::Vector2f(shootBlock.shape.getSize().x / 2.f, shootBlock.shape.getSize().y);
+                        sf::Vector2f(50. / 2.f, 20.);
 
                     bullet.shape.setPosition(blockCenter);
                     bullet.shape.setOrigin(sf::Vector2f(2.5, 7.5));
@@ -710,7 +758,7 @@ void playState(
             }
         }
 
-        // Block bullets destroy houses
+        // Ship bullets destroy houses
         for (int bulletId = 0; bulletId < gameData.blockBullets.size();) {
             bool bulletHit = false;
             for (int houseId = 0; houseId < gameData.houses.size(); houseId++) {
@@ -736,7 +784,7 @@ void playState(
             }
         }
 
-        // Block bullets damages player
+        // Ship bullets damages player
         for (int bulletId = 0; bulletId < gameData.blockBullets.size();) {
             bool bulletHit = false;
             sf::FloatRect bulletBounds = gameData.blockBullets[bulletId].shape.getGlobalBounds();
@@ -763,12 +811,19 @@ void playState(
         }
     }
 
+    sf::CircleShape earth(500);
+    earth.setPointCount(50);
+    earth.setFillColor(sf::Color::Blue);
+    earth.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y + 400));
+    earth.setOrigin(sf::Vector2f(earth.getRadius(), earth.getRadius()));
+
     gameData.window.clear(sf::Color::Black);
-    gameData.window.draw(gameData.player.shape);
 
     gameData.window.draw(livesText);
     gameData.window.draw(scoreText);
     gameData.window.draw(roundText);
+
+    gameData.window.draw(earth);
 
     for (auto bullet : gameData.bullets) {
         gameData.window.draw(bullet.shape);
@@ -778,13 +833,15 @@ void playState(
         gameData.window.draw(bullet.shape);
     }
 
-    for (auto block : gameData.blocks) {
+    for (auto block : gameData.ships) {
         gameData.window.draw(block.shape);
     }
 
     for (auto house : gameData.houses) {
         gameData.window.draw(house.shape);
     }
+
+    gameData.window.draw(gameData.player.shape);
 
     // show Pause menu
     if (gameData.isPaused) {
@@ -943,8 +1000,10 @@ void playState(
 
 void mainMenuState(
     GameData& gameData, MainMenuState& mainState,
-    sf::Event& event, bool& isRunning
+    sf::Event& event, bool& isRunning,
+    float& dt, MenuState& menuState
 ) {
+    // Main Menu buttons
     Button playButton(
         sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20),
         sf::Vector2f(120, 40),
@@ -963,16 +1022,117 @@ void mainMenuState(
         [&isRunning]() {isRunning = false;}
     );
 
-    sf::Text text("Game Title", gameData.font, 55);
-    text.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2. - 130, WINDOW_SIZE.y / 2 - 150));
+    // Play and Load buttons
+    Button newGameButton(
+        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20),
+        sf::Vector2f(120, 40),
+        "New Game",
+        gameData.font,
+        [&]() {
+            menuState = Play;
+            // it's done second time cause Player when going back from game
+            // may want to play again, therefore data has to be new
+            gameData.make();
+            mainState = MainMenu;
+        }
+    );
 
-    playButton.handleEvent(event, gameData.window);
-    exitButton.handleEvent(event, gameData.window);
+    Button loadGameButton(
+        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. + 40),
+        sf::Vector2f(120, 40),
+        "Load Game",
+        gameData.font,
+        [&]() {
+            menuState = Play;
+            gameData.loadGame();
+            mainState = MainMenu;
+            startNewRound(gameData);
+        }
+    );
+
+    Button backButton(
+        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. + 100),
+        sf::Vector2f(120, 40),
+        "Back",
+        gameData.font,
+        [&]() {
+            mainState = MainMenu;
+        }
+    );
+
+    sf::Text text1("Pew-Pew", gameData.font, 30);
+    text1.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2. - 110, WINDOW_SIZE.y / 2 - 125));
+    text1.setFillColor(sf::Color::Red);
+
+    sf::Text text2("Panic!", gameData.font, 55);
+    text2.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2. - 30, WINDOW_SIZE.y / 2. - 100));
+
+    // Start of a bunch of math
+    float centerX = WINDOW_SIZE.x / 2. - 100;
+    float centerY = WINDOW_SIZE.y / 2. - 60;
+
+    sf::CircleShape earth(250.f);
+    earth.setFillColor(sf::Color::Blue);
+    earth.setPosition(centerX, centerY);
+    earth.setOrigin(earth.getRadius(), earth.getRadius());
+
+    sf::CircleShape moon(80.f);
+    moon.setFillColor(sf::Color(200, 200, 200));
+    moon.setOrigin(moon.getRadius(), moon.getRadius());
+
+    float a = gameData.orbitRadius + 170;
+    float b = gameData.orbitRadius * 0.3f;
+
+    float moonX = centerX + cos(gameData.angle) * a;
+    float moonY = centerY + sin(gameData.angle) * b;
+
+    float scaleFactor = 0.7f + 0.3f * (sin(gameData.angle) + 1.0f) / 2.0f;
+    moon.setRadius(80.f * scaleFactor);
+    moon.setOrigin(moon.getRadius(), moon.getRadius());
+
+    float zPos = sin(gameData.angle);
+
+    moon.setPosition(moonX, moonY);
+
+    uint8_t brightness = static_cast<uint8_t>(200 * (0.7f + 0.3f * (zPos + 1.0f) / 2.0f));
+    moon.setFillColor(sf::Color(brightness, brightness, brightness));
+    // End of a bunch of math
+
 
     gameData.window.clear(sf::Color::Black);
-    playButton.draw(gameData.window);
-    exitButton.draw(gameData.window);
-    gameData.window.draw(text);
+
+    if (zPos < 0) {
+        gameData.window.draw(moon);
+        gameData.window.draw(earth);
+    } else {
+        gameData.window.draw(earth);
+        gameData.window.draw(moon);
+    }
+
+    switch (mainState)
+    {
+    case MainMenu:
+        playButton.handleEvent(event, gameData.window);
+        exitButton.handleEvent(event, gameData.window);
+
+        playButton.draw(gameData.window);
+        exitButton.draw(gameData.window);
+        break;
+    case PlayAndLoad:
+        newGameButton.handleEvent(event, gameData.window);
+        loadGameButton.handleEvent(event, gameData.window);
+        backButton.handleEvent(event, gameData.window);
+
+        newGameButton.draw(gameData.window);
+        loadGameButton.draw(gameData.window);
+        backButton.draw(gameData.window);
+        break;
+    }
+
+    gameData.window.draw(text1);
+    gameData.window.draw(text2);
+
+    gameData.angle += 0.7f * dt;
 }
 
 void playAndLoadState(
@@ -1027,34 +1187,34 @@ void playAndLoadState(
 }
 
 void centerBlockOnGrid(
-    std::vector<Block>& blocks, sf::RenderWindow& window,
+    std::vector<Ship>& ships, sf::RenderWindow& window,
     int gridColumns, int gridRows,
     float marginX, float marginY
 ) {
-    if (blocks.empty() || gridColumns <= 0 || gridRows <= 0) return;
+    if (ships.empty() || gridColumns <= 0 || gridRows <= 0) return;
 
-    sf::Vector2f rectSize = blocks[0].shape.getSize();
+    sf::Vector2f rectSize = sf::Vector2f(50, 20);
 
     float gridWidth = gridColumns * rectSize.x + (gridColumns - 1) * marginX;
     float gridHeight = gridRows * rectSize.y + (gridRows - 1) * marginY;
 
     float startX = ((WINDOW_SIZE.x - gridWidth) / 2.0f);
-    float startY = ((WINDOW_SIZE.y - gridHeight) / 2.0f) - (WINDOW_SIZE.y - gridHeight) * 0.40;
+    float startY = ((WINDOW_SIZE.y - gridHeight) / 2.0f) - (WINDOW_SIZE.y - gridHeight) * 0.30;
 
     int count = 0;
     for (int row = 0; row < gridRows; ++row) {
         int livesForRow = gridRows - row;
 
         for (int col = 0; col < gridColumns; ++col) {
-            if (count >= blocks.size()) break;
+            if (count >= ships.size()) break;
 
             float x = startX + col * (rectSize.x + marginX);
             float y = startY + row * (rectSize.y + marginY);
 
-            blocks[count].shape.setPosition(x, y);
-            blocks[count].lives = livesForRow;
-            blocks[count].maxLives = livesForRow;
-            blocks[count].updateColor();
+            ships[count].shape.setPosition(x, y);
+            ships[count].lives = livesForRow;
+            ships[count].maxLives = livesForRow;
+            ships[count].updateColor();
             ++count;
         }
     }
@@ -1063,13 +1223,14 @@ void centerBlockOnGrid(
 void centerHouseOnGrid(std::vector<House>& houses, sf::RenderWindow& window, float marginX) {
     if (houses.empty()) return;
 
-    sf::Vector2f rectSize = houses[0].shape.getSize();
+    // 50 x 30
+    sf::Vector2f rectSize = sf::Vector2f(50, 30);
 
     int numHouses = houses.size();
     float largeMargin = marginX * 3;
     float totalWidth = (numHouses * rectSize.x) + ((numHouses - 1) * largeMargin);
     float startX = (WINDOW_SIZE.x - totalWidth) / 2.0f;
-    float y = WINDOW_SIZE.y * 0.8f;
+    float y = WINDOW_SIZE.y * 0.82f;
 
     for (int i = 0; i < numHouses; ++i) {
         float x = startX + i * (rectSize.x + largeMargin);
@@ -1090,28 +1251,29 @@ void startNewRound(GameData& gameData) {
 
     gameData.graceTimeClock.restart();
 
-    // Create blocks with increased health based on round
-    gameData.blocks.clear();
-    int blockAmount = 50 + (gameData.round - 1) * 3;
-    for (int i = 0; i < blockAmount; i++) {
-        Block block{ sf::RectangleShape(sf::Vector2f(50, 20)) };
-        block.shape.setFillColor(sf::Color::White);
-        gameData.blocks.push_back(block);
+    // Create ships with increased health based on round
+    gameData.ships.clear();
+    int shipsAmount = 50 + (gameData.round - 1) * 3;
+    for (int i = 0; i < shipsAmount; i++) {
+        Ship ship;
+        ship.setShape();
+        ship.shape.setFillColor(sf::Color::White);
+        gameData.ships.push_back(ship);
     }
 
     int gridCol = 10;
-    int gridRow = (blockAmount + gridCol - 1) / gridCol; // Calculate rows needed
+    int gridRow = (shipsAmount + gridCol - 1) / gridCol; // Calculate rows needed
     float marginX = 10;
     float marginY = 15;
 
     centerBlockOnGrid(
-        gameData.blocks, gameData.window,
+        gameData.ships, gameData.window,
         gridCol, gridRow,
         marginX, marginY
     );
 
     // Increase block health based on round
-    for (auto& block : gameData.blocks) {
+    for (auto& block : gameData.ships) {
         block.maxLives += (gameData.round - 1);
         block.lives = block.maxLives;
         block.updateColor();
@@ -1126,7 +1288,8 @@ void startNewRound(GameData& gameData) {
     } else {
         int houseAmount = std::min(gameData.round, 4);
         for (int i = 0; i < houseAmount; i++) {
-            House house{ sf::RectangleShape(sf::Vector2f(50, 30)) };
+            House house;
+            house.setShape();
             house.shape.setFillColor(sf::Color::White);
             gameData.houses.push_back(house);
         }
