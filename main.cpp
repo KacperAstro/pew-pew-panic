@@ -488,11 +488,6 @@ void mainMenuState(
     float& dt, MenuState& menuState
 );
 
-void playAndLoadState(
-    GameData& gameData, MainMenuState& mainState,
-    sf::Event& event, MenuState& menuState
-);
-
 void startNewRound(GameData& gameData);
 
 sf::Text updateLivesText(const sf::Font& font, const int& totalLives);
@@ -1133,57 +1128,6 @@ void mainMenuState(
     gameData.window.draw(text2);
 
     gameData.angle += 0.7f * dt;
-}
-
-void playAndLoadState(
-    GameData& gameData, MainMenuState& mainState,
-    sf::Event& event, MenuState& menuState
-) {
-    Button newGameButton(
-        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20 - 60),
-        sf::Vector2f(120, 40),
-        "New Game",
-        gameData.font,
-        [&]() {
-            menuState = Play;
-            // it's done second time cause Player when going back from game
-            // may want to play again, therefore data has to be new
-            gameData.make();
-            mainState = MainMenu;
-        }
-    );
-
-    Button loadGameButton(
-        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20),
-        sf::Vector2f(120, 40),
-        "Load Game",
-        gameData.font,
-        [&]() {
-            menuState = Play;
-            gameData.loadGame();
-            mainState = MainMenu;
-            startNewRound(gameData);
-        }
-    );
-
-    Button backButton(
-        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20 + 60),
-        sf::Vector2f(120, 40),
-        "Back",
-        gameData.font,
-        [&]() {
-            mainState = MainMenu;
-        }
-    );
-
-    newGameButton.handleEvent(event, gameData.window);
-    loadGameButton.handleEvent(event, gameData.window);
-    backButton.handleEvent(event, gameData.window);
-
-    gameData.window.clear(sf::Color::Black);
-    newGameButton.draw(gameData.window);
-    loadGameButton.draw(gameData.window);
-    backButton.draw(gameData.window);
 }
 
 void centerBlockOnGrid(
