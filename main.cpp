@@ -3,6 +3,10 @@
 #include <functional>
 #include <vector>
 #include <random>
+#include <fstream>
+
+// Save Game
+// choose difficulty
 
 const sf::Vector2f WINDOW_SIZE = sf::Vector2f(800, 600);
 
@@ -118,9 +122,14 @@ public:
     }
 };
 
-enum GameState {
+enum MenuState {
     Play,
     Menu,
+};
+
+enum MainMenuState {
+    MainMenu,
+    PlayAndLoad,
 };
 
 struct Bullet {
@@ -186,7 +195,6 @@ struct Player {
     bool isAlive = true;
     float respawnTimer = 0.0f;
     static constexpr float respawnDelay = 5.0f; // 5 seconds for respawn
-    bool isGameOver = false;
 
     void updateColor() {
         if (!isAlive) {
@@ -211,7 +219,7 @@ struct Player {
         }
     }
 
-    void respawn() {
+    void respawn(bool& isGameOver) {
         if (totalLives > 0) {
             isAlive = true;
             currentLives = maxLives;
@@ -222,11 +230,11 @@ struct Player {
         }
     }
 
-    void update(float deltaTime, sf::Clock& shootClock, std::vector<Bullet>& bullets) {
+    void update(float deltaTime, sf::Clock& shootClock, std::vector<Bullet>& bullets, bool& isGameOver) {
         if (!isAlive) {
             respawnTimer += deltaTime;
             if (respawnTimer >= respawnDelay) {
-                respawn();
+                respawn(isGameOver);
                 respawnTimer = 0.0f;
             }
         } else {
@@ -259,29 +267,7 @@ struct Player {
     }
 };
 
-// Later make a resource type for every state
-void playState(
-    sf::RenderWindow& window, Player& player,
-    GameState& gameState, std::vector<Bullet>& bullets,
-    sf::Clock& shootClock, std::vector<Block>& blocks,
-    float dt, sf::Clock& moveClock,
-    sf::Clock& blockClock, std::vector<Bullet>& blockBullets,
-    std::vector<House>& houses, sf::Clock& restartClock,
-    int& score, int& round,
-    bool& showPostRoundMenu, sf::Event& event,
-    bool& isPaused
-);
-
-void menuState(
-    sf::RenderWindow& window, GameState& gameState,
-    const sf::Event& event, bool& isRunning,
-    Player& player, std::vector<Block>& blocks,
-    std::vector<House>& houses, std::vector<Bullet>& bullets,
-    std::vector<Bullet>& blockBullets, int& score,
-    int& round
-);
-void pausedState(sf::RenderWindow& window, GameState& gameState);
-
+// Helper functions
 void centerBlockOnGrid(
     std::vector<Block>& blocks, sf::RenderWindow& window,
     int gridColumns, int gridRows,
@@ -290,19 +276,162 @@ void centerBlockOnGrid(
 
 void centerHouseOnGrid(std::vector<House>& houses, sf::RenderWindow& window, float marginX);
 
-void startGame(
-    Player& player, std::vector<Block>& blocks,
-    std::vector<House>& houses, std::vector<Bullet>& bullets,
-    std::vector<Bullet>& blockBullets, sf::RenderWindow& window,
-    int& score, int& round
+struct GameData {
+    sf::RenderWindow& window;
+    Player player;
+    sf::Font font;
+
+    std::vector<Bullet> bullets;
+    std::vector<Bullet> blockBullets;
+
+    std::vector<Block> blocks;
+    std::vector<House> houses;
+
+    sf::Clock shootClock;
+    sf::Clock moveClock;
+    sf::Clock blockClock;
+    sf::Clock restartClock;
+    sf::Clock graceTimeClock;
+
+    int score;
+    int round;
+
+    bool showPostRoundMenu;
+    bool isPaused;
+    bool isGameOver;
+
+    void make() {
+        player.currentLives = 2;
+        player.maxLives = 2;
+        player.totalLives = 3;
+        player.isAlive = true;
+        isGameOver = false;
+
+        player.shape.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
+        player.shape.setOrigin(sf::Vector2f(30.0f, 10.0f));
+
+        player.updateColor();
+        graceTimeClock.restart();
+
+        round = 1;
+        score = 0;
+
+        houses.clear();
+        blocks.clear();
+        bullets.clear();
+        blockBullets.clear();
+
+        int blockAmount = 50;
+        for (int i = 0; i < blockAmount; i++) {
+            Block block{ sf::RectangleShape(sf::Vector2f(50, 20)) };
+            block.shape.setFillColor(sf::Color::White);
+            blocks.push_back(block);
+        }
+
+        int gridCol = 10;
+        int gridRow = 5;
+        float marginX = 10;
+        float marginY = 15;
+
+        centerBlockOnGrid(
+            blocks, window,
+            gridCol, gridRow,
+            marginX, marginY
+        );
+
+        int houseAmount = 4;
+        for (int i = 0; i < houseAmount; i++) {
+            House house{ sf::RectangleShape(sf::Vector2f(50, 30)) };
+            house.shape.setFillColor(sf::Color::White);
+            houses.push_back(house);
+        }
+
+        centerHouseOnGrid(houses, window, 35.);
+    }
+
+    void saveGame() {
+        // int round
+        // int score
+        // int player.currentLives
+        // int player.totalLives;
+        // std::vector<House> houses
+
+        std::ofstream outFile("data.txt");
+        if (outFile.is_open()) {
+            // +1 casue we will be playing the next round
+            outFile << round + 1 << std::endl;
+            outFile << score << std::endl;
+
+            outFile << player.currentLives << std::endl;
+            outFile << player.totalLives << std::endl;
+
+            outFile << houses.size() << std::endl;
+            for (const auto& house : houses) {
+                outFile << house.lives << std::endl;
+
+                outFile << house.shape.getPosition().x << std::endl;
+                outFile << house.shape.getPosition().y << std::endl;
+            }
+            outFile.close();
+        }
+    }
+
+    void loadGame() {
+        // int round
+        // int score
+        // int player.currentLives
+        // int player.totalLives;
+        // std::vector<House> houses
+
+        std::ifstream inFile("data.txt");
+        if (inFile.is_open()) {
+            inFile >> round;
+            inFile >> score;
+            inFile >> player.currentLives;
+            inFile >> player.totalLives;
+
+            size_t houseSize;
+            inFile >> houseSize;
+            inFile.ignore();
+
+            houses.clear();
+            if (houseSize > 0) {
+                for (size_t i = 0; i < houseSize; i++) {
+                    House house{ sf::RectangleShape(sf::Vector2f(50, 30)) };
+
+                    sf::Vector2f pos(0.0, 0.0);
+
+                    inFile >> house.lives;
+                    inFile >> pos.x;
+                    inFile >> pos.y;
+
+                    house.shape.setPosition(pos);
+                    house.updateColor();
+
+                    houses.push_back(house);
+                }
+            }
+        }
+    }
+};
+
+// Later make a resource type for every state
+void playState(
+    GameData& gameData, sf::Event& event,
+    float dt, MenuState& menuState
 );
 
-void startNewRound(
-    Player& player, std::vector<Block>& blocks,
-    std::vector<House>& houses, std::vector<Bullet>& bullets,
-    std::vector<Bullet>& blockBullets, sf::RenderWindow& window,
-    int round
+void mainMenuState(
+    GameData& gameData, MainMenuState& mainState,
+    sf::Event& event, bool& isRunning
 );
+
+void playAndLoadState(
+    GameData& gameData, MainMenuState& mainState,
+    sf::Event& event, MenuState& menuState
+);
+
+void startNewRound(GameData& gameData);
 
 sf::Text updateLivesText(const sf::Font& font, const int& totalLives);
 sf::Text updateScoreText(const sf::Font& font, const int& score);
@@ -313,26 +442,18 @@ int main() {
         sf::RectangleShape(sf::Vector2f(60.0f, 20.0f)),
         250.0f,
     };
+    sf::Font font;
+    if (!font.loadFromFile("arial.ttf")) return -1;
 
-    std::vector<Bullet> bullets;
-    std::vector<Block> blocks;
-    std::vector<Bullet> blockBullets;
-    std::vector<House> houses;
+    GameData gameData{ window, player };
+    gameData.font = font;
+    gameData.make();
 
-    int score = 0;
-    int round = 1;
-
-    GameState gameState = Menu;
+    MenuState menuState = Menu;
+    MainMenuState mainState = MainMenu;
 
     bool isRunning = true;
-    bool showPostRoundMenu = false;
-    bool isPaused = false;
-
-    sf::Clock shootClock;
     sf::Clock deltaClock;
-    sf::Clock moveClock;
-    sf::Clock blockClock;
-    sf::Clock restartClock;
 
     while (isRunning) {
         sf::Event event;
@@ -344,35 +465,33 @@ int main() {
             }
             if (event.type == sf::Event::KeyPressed) {
                 if (event.key.code == sf::Keyboard::Escape) {
-                    isPaused = !isPaused;
+                    gameData.isPaused = !gameData.isPaused;
                 }
             }
         }
 
-        switch (gameState)
+        switch (menuState)
         {
         case Menu:
-            menuState(
-                window, gameState,
-                event, isRunning,
-                player, blocks,
-                houses, bullets,
-                blockBullets, score,
-                round
-            );
+            switch (mainState)
+            {
+            case MainMenu:
+                mainMenuState(
+                    gameData, mainState,
+                    event, isRunning
+                );
+                break;
+            case PlayAndLoad:
+                playAndLoadState(
+                    gameData, mainState,
+                    event, menuState
+                );
+                break;
+            }
+
             break;
         case Play:
-            playState(
-                window, player,
-                gameState, bullets,
-                shootClock, blocks,
-                dt, moveClock,
-                blockClock, blockBullets,
-                houses, restartClock,
-                score, round,
-                showPostRoundMenu, event,
-                isPaused
-            );
+            playState(gameData, event, dt, menuState);
             break;
         }
 
@@ -384,70 +503,60 @@ int main() {
 }
 
 void playState(
-    sf::RenderWindow& window, Player& player,
-    GameState& gameState, std::vector<Bullet>& bullets,
-    sf::Clock& shootClock, std::vector<Block>& blocks,
-    float dt, sf::Clock& moveClock,
-    sf::Clock& blockClock, std::vector<Bullet>& blockBullets,
-    std::vector<House>& houses, sf::Clock& restartClock,
-    int& score, int& round,
-    bool& showPostRoundMenu, sf::Event& event,
-    bool& isPaused
+    GameData& gameData, sf::Event& event,
+    float dt, MenuState& menuState
 ) {
-    sf::Font font;
-    if (!font.loadFromFile("arial.ttf")) return;
+    sf::Text livesText = updateLivesText(gameData.font, gameData.player.totalLives);
+    sf::Text scoreText = updateScoreText(gameData.font, gameData.score);
 
-    sf::Text livesText = updateLivesText(font, player.totalLives);
-    sf::Text scoreText = updateScoreText(font, score);
-
-    sf::Text roundText("Round: " + std::to_string(round), font, 20);
+    sf::Text roundText("Round: " + std::to_string(gameData.round), gameData.font, 20);
     roundText.setFillColor(sf::Color::Yellow);
     roundText.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2 - 50, WINDOW_SIZE.y / 10. - 50.));
 
-    if (blocks.empty() && !showPostRoundMenu) {
-        showPostRoundMenu = true;
+    if (gameData.blocks.empty() && !gameData.showPostRoundMenu) {
+        gameData.showPostRoundMenu = true;
     }
 
     // Restart game
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::R)) {
-        startGame(player, blocks, houses, bullets, blockBullets, window, score, round);
+        gameData.make();
     }
 
     // Testing purpose
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::B)) {
-        blocks.clear();
+        gameData.blocks.clear();
     }
 
-    if (!showPostRoundMenu && !isPaused) {
+    if (!gameData.showPostRoundMenu && !gameData.isPaused && !gameData.isGameOver) {
 
-        player.update(dt, shootClock, bullets);
+        gameData.player.update(dt, gameData.shootClock, gameData.bullets, gameData.isGameOver);
 
         // Move Player Bullets
-        for (auto it = bullets.begin(); it != bullets.end(); ) {
+        for (auto it = gameData.bullets.begin(); it != gameData.bullets.end(); ) {
             it->shape.move(0, -600 * dt);
 
             if (it->shape.getPosition().y + it->shape.getSize().y < 0) {
-                it = bullets.erase(it);
+                it = gameData.bullets.erase(it);
             } else {
                 ++it;
             }
         }
 
         // Bullet deals damage to blocks
-        for (int bulletId = 0; bulletId < bullets.size();) {
+        for (int bulletId = 0; bulletId < gameData.bullets.size();) {
             bool bulletHit = false;
-            for (int blockId = 0; blockId < blocks.size(); blockId++) {
-                sf::FloatRect bulletBounds = bullets[bulletId].shape.getGlobalBounds();
-                sf::FloatRect blockBounds = blocks[blockId].shape.getGlobalBounds();
+            for (int blockId = 0; blockId < gameData.blocks.size(); blockId++) {
+                sf::FloatRect bulletBounds = gameData.bullets[bulletId].shape.getGlobalBounds();
+                sf::FloatRect blockBounds = gameData.blocks[blockId].shape.getGlobalBounds();
 
                 if (bulletBounds.intersects(blockBounds)) {
-                    if (blocks[blockId].lives <= 0) {
-                        blocks.erase(blocks.begin() + blockId);
-                        score += 50;
+                    if (gameData.blocks[blockId].lives <= 0) {
+                        gameData.blocks.erase(gameData.blocks.begin() + blockId);
+                        gameData.score += 50;
                     } else {
-                        blocks[blockId].lives--;
-                        blocks[blockId].updateColor();
-                        score += 10;
+                        gameData.blocks[blockId].lives--;
+                        gameData.blocks[blockId].updateColor();
+                        gameData.score += 10;
                     }
                     bulletHit = true;
                     break;
@@ -455,25 +564,25 @@ void playState(
             }
 
             if (bulletHit) {
-                bullets.erase(bullets.begin() + bulletId);
+                gameData.bullets.erase(gameData.bullets.begin() + bulletId);
             } else {
                 bulletId++;
             }
         }
 
         // Player bullets deals damage to the houses
-        for (int bulletId = 0; bulletId < bullets.size();) {
+        for (int bulletId = 0; bulletId < gameData.bullets.size();) {
             bool bulletHit = false;
-            for (int houseId = 0; houseId < houses.size(); houseId++) {
-                sf::FloatRect bulletBounds = bullets[bulletId].shape.getGlobalBounds();
-                sf::FloatRect houseBounds = houses[houseId].shape.getGlobalBounds();
+            for (int houseId = 0; houseId < gameData.houses.size(); houseId++) {
+                sf::FloatRect bulletBounds = gameData.bullets[bulletId].shape.getGlobalBounds();
+                sf::FloatRect houseBounds = gameData.houses[houseId].shape.getGlobalBounds();
 
                 if (bulletBounds.intersects(houseBounds)) {
-                    if (houses[houseId].lives == 0) {
-                        houses.erase(houses.begin() + houseId);
+                    if (gameData.houses[houseId].lives == 0) {
+                        gameData.houses.erase(gameData.houses.begin() + houseId);
                     } else {
-                        houses[houseId].lives--;
-                        houses[houseId].updateColor();
+                        gameData.houses[houseId].lives--;
+                        gameData.houses[houseId].updateColor();
                     }
                     bulletHit = true;
                     break;
@@ -481,72 +590,88 @@ void playState(
             }
 
             if (bulletHit) {
-                bullets.erase(bullets.begin() + bulletId);
+                gameData.bullets.erase(gameData.bullets.begin() + bulletId);
             } else {
                 bulletId++;
             }
         }
 
-        // Get blocks that can shoot
+        // Add a bit of a grace time at the start of the round/game
         std::vector<Block> shootableBlocks;
-        for (auto& block : blocks) {
-            sf::FloatRect blockBounds = block.shape.getGlobalBounds();
-            bool hasBlockBelow = false;
+        if (gameData.graceTimeClock.getElapsedTime() > sf::seconds(1.)) {
+            // Get blocks that can shoot
+            for (auto& block : gameData.blocks) {
+                sf::FloatRect blockBounds = block.shape.getGlobalBounds();
+                bool hasBlockBelow = false;
 
-            for (auto& otherBlock : blocks) {
-                if (&block == &otherBlock) continue;
+                for (auto& otherBlock : gameData.blocks) {
+                    if (&block == &otherBlock) continue;
 
-                sf::FloatRect otherBlockBounds = otherBlock.shape.getGlobalBounds();
+                    sf::FloatRect otherBlockBounds = otherBlock.shape.getGlobalBounds();
 
-                if (blockBounds.left == otherBlockBounds.left &&
-                    blockBounds.top + blockBounds.height + 15 /*MarginX*/ == otherBlockBounds.top) {
-                    hasBlockBelow = true;
-                    break;
+                    if (blockBounds.left == otherBlockBounds.left &&
+                        blockBounds.top + blockBounds.height + 15 /*MarginX*/ == otherBlockBounds.top) {
+                        hasBlockBelow = true;
+                        break;
+                    }
                 }
-            }
 
-            if (!hasBlockBelow) {
-                // block.shape.setFillColor(sf::Color::Red);
-                shootableBlocks.push_back(block);
+                if (!hasBlockBelow) {
+                    // block.shape.setFillColor(sf::Color::Red);
+                    shootableBlocks.push_back(block);
+                }
             }
         }
 
         // Lower the time needed for blocks to shoot and move
         float harder;
-        if (blocks.size() > 2) {
-            harder = (5. / blocks.size()) + (round * 0.15f);
+        if (gameData.blocks.size() > 2) {
+            harder = (5. / gameData.blocks.size()) + (gameData.round * 0.1f);
         } else {
-            harder = 1.3 + (round * 0.15f);
+            harder = 1.3 + (gameData.round * 0.1f);
         }
 
         harder = std::min(harder, 1.5f);
 
         // Move blocks
-        if (moveClock.getElapsedTime() > sf::seconds(2.0 - harder)) {
-            for (auto& block : blocks) {
+        if (gameData.moveClock.getElapsedTime() > sf::seconds(2.0 - harder)) {
+            for (auto& block : gameData.blocks) {
                 if (harder > 0.3) {
                     block.shape.move(sf::Vector2f(0.0, 3.0));
                 } else {
                     block.shape.move(sf::Vector2f(0.0, 1.0));
                 }
             }
-            moveClock.restart();
+            gameData.moveClock.restart();
         }
 
         // Random amount of bullets are shoot by random amount of the blocks
-        if (blockClock.getElapsedTime() > sf::seconds(2.5 - harder)) {
-            if (!shootableBlocks.empty() && blockBullets.size() < 50) {
-                int maxAmount = 5;
+        if (gameData.blockClock.getElapsedTime() > sf::seconds(3.0 - harder)) {
+            std::vector<int> shootBlockId;
+
+            if (!shootableBlocks.empty() && gameData.blockBullets.size() < 50) {
+                int maxAmount = 4;
                 if (shootableBlocks.size() < 5) {
                     maxAmount = shootableBlocks.size();
                 }
                 int minAmount = 1;
+
                 int randAmount = rand() % (maxAmount - minAmount + 1) + minAmount;
+                int i = 0;
 
-                for (int i = 0; i < randAmount; i++) {
+                while (i < randAmount) {
                     int randInt = rand() % shootableBlocks.size();
-                    const Block& shootBlock = shootableBlocks[randInt];
 
+                    if (std::count(shootBlockId.begin(), shootBlockId.end(), randInt)) {
+                        continue;
+                    } else {
+                        shootBlockId.push_back(randInt);
+                        i++;
+                    }
+                }
+
+                for (const auto& id : shootBlockId) {
+                    const Block& shootBlock = shootableBlocks[id];
                     Bullet bullet{ sf::RectangleShape(sf::Vector2f(5, 15)) };
 
                     sf::Vector2f blockCenter = shootBlock.shape.getPosition() +
@@ -556,37 +681,44 @@ void playState(
                     bullet.shape.setOrigin(sf::Vector2f(2.5, 7.5));
                     bullet.shape.setFillColor(sf::Color::Red);
 
-                    blockBullets.push_back(bullet);
+                    gameData.blockBullets.push_back(bullet);
                 }
 
-                blockClock.restart();
+                gameData.blockClock.restart();
+            }
+        }
+
+        // Check if ShootableBlocks are under certain position
+        for (auto& block : shootableBlocks) {
+            if (block.shape.getPosition().y >= WINDOW_SIZE.y * 0.71) {
+                gameData.isGameOver = true;
             }
         }
 
         // Move block bullets
-        for (auto it = blockBullets.begin(); it != blockBullets.end(); ) {
+        for (auto it = gameData.blockBullets.begin(); it != gameData.blockBullets.end(); ) {
             it->shape.move(0, 600 * dt);
 
             if (it->shape.getPosition().y > WINDOW_SIZE.y) {
-                it = blockBullets.erase(it);
+                it = gameData.blockBullets.erase(it);
             } else {
                 ++it;
             }
         }
 
         // Block bullets destroy houses
-        for (int bulletId = 0; bulletId < blockBullets.size();) {
+        for (int bulletId = 0; bulletId < gameData.blockBullets.size();) {
             bool bulletHit = false;
-            for (int houseId = 0; houseId < houses.size(); houseId++) {
-                sf::FloatRect bulletBounds = blockBullets[bulletId].shape.getGlobalBounds();
-                sf::FloatRect houseBounds = houses[houseId].shape.getGlobalBounds();
+            for (int houseId = 0; houseId < gameData.houses.size(); houseId++) {
+                sf::FloatRect bulletBounds = gameData.blockBullets[bulletId].shape.getGlobalBounds();
+                sf::FloatRect houseBounds = gameData.houses[houseId].shape.getGlobalBounds();
 
                 if (bulletBounds.intersects(houseBounds)) {
-                    if (houses[houseId].lives == 0) {
-                        houses.erase(houses.begin() + houseId);
+                    if (gameData.houses[houseId].lives == 0) {
+                        gameData.houses.erase(gameData.houses.begin() + houseId);
                     } else {
-                        houses[houseId].lives--;
-                        houses[houseId].updateColor();
+                        gameData.houses[houseId].lives--;
+                        gameData.houses[houseId].updateColor();
                     }
                     bulletHit = true;
                     break;
@@ -594,105 +726,65 @@ void playState(
             }
 
             if (bulletHit) {
-                blockBullets.erase(blockBullets.begin() + bulletId);
+                gameData.blockBullets.erase(gameData.blockBullets.begin() + bulletId);
             } else {
                 bulletId++;
             }
         }
 
         // Block bullets damages player
-        for (int bulletId = 0; bulletId < blockBullets.size();) {
+        for (int bulletId = 0; bulletId < gameData.blockBullets.size();) {
             bool bulletHit = false;
+            sf::FloatRect bulletBounds = gameData.blockBullets[bulletId].shape.getGlobalBounds();
+            sf::FloatRect playerBounds = gameData.player.shape.getGlobalBounds();
 
-            sf::FloatRect bulletBounds = blockBullets[bulletId].shape.getGlobalBounds();
-            sf::FloatRect playerBounds = player.shape.getGlobalBounds();
+            if (bulletBounds.intersects(playerBounds) && gameData.player.isAlive) {
+                gameData.player.currentLives--;
+                gameData.player.updateColor();
 
-            if (bulletBounds.intersects(playerBounds) && player.isAlive) {
-                player.currentLives--;
-                player.updateColor();
-
-                if (player.currentLives <= 0) {
-                    player.totalLives--;
-                    player.isAlive = false;
-                    player.respawnTimer = 0.0f;
+                if (gameData.player.currentLives <= 0) {
+                    gameData.player.totalLives--;
+                    gameData.player.isAlive = false;
+                    gameData.player.respawnTimer = 0.0f;
                 }
 
                 bulletHit = true;
             }
 
             if (bulletHit) {
-                blockBullets.erase(blockBullets.begin() + bulletId);
+                gameData.blockBullets.erase(gameData.blockBullets.begin() + bulletId);
             } else {
                 bulletId++;
             }
         }
-
-        // Show Game Over menu
-        if (player.isGameOver) {
-            static MenuOverlay gameOverMenu(font, "Game Over!", WINDOW_SIZE);
-            static bool menuInitialized = false;
-
-            if (!menuInitialized) {
-                Button restartButton(
-                    sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f - 20),
-                    sf::Vector2f(120, 40),
-                    "Restart",
-                    font,
-                    [&]() {
-                        player.isGameOver = false;
-                        round = 1;
-                        startGame(player, blocks, houses, bullets, blockBullets, window, score, round);
-                    }
-                );
-
-                Button menuButton(
-                    sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f + 40),
-                    sf::Vector2f(120, 40),
-                    "Main Menu",
-                    font,
-                    [&]() {
-                        player.isGameOver = false;
-                        gameState = Menu;
-                    }
-                );
-
-                gameOverMenu.addButton(restartButton);
-                gameOverMenu.addButton(menuButton);
-                gameOverMenu.setScoreText(font, "Final Score: " + std::to_string(score));
-                menuInitialized = true;
-            }
-
-            gameOverMenu.handleEvent(event, window);
-            gameOverMenu.draw(window);
-            return;  // Skip regular game rendering when showing game over menu
-        }
     }
 
-    window.clear(sf::Color::Black);
-    window.draw(player.shape);
+    gameData.window.clear(sf::Color::Black);
+    gameData.window.draw(gameData.player.shape);
 
-    window.draw(livesText);
-    window.draw(scoreText);
+    gameData.window.draw(livesText);
+    gameData.window.draw(scoreText);
+    gameData.window.draw(roundText);
 
-    for (auto bullet : bullets) {
-        window.draw(bullet.shape);
+    for (auto bullet : gameData.bullets) {
+        gameData.window.draw(bullet.shape);
     }
 
-    for (auto bullet : blockBullets) {
-        window.draw(bullet.shape);
+    for (auto bullet : gameData.blockBullets) {
+        gameData.window.draw(bullet.shape);
     }
 
-    for (auto block : blocks) {
-        window.draw(block.shape);
+    for (auto block : gameData.blocks) {
+        gameData.window.draw(block.shape);
     }
 
-    for (auto house : houses) {
-        window.draw(house.shape);
+    for (auto house : gameData.houses) {
+        gameData.window.draw(house.shape);
     }
 
     // show Pause menu
-    if (isPaused) {
-        static MenuOverlay pauseMenu(font, "Paused", WINDOW_SIZE);
+    if (gameData.isPaused) {
+        static MenuOverlay pauseMenu(gameData.font, "Paused", WINDOW_SIZE);
         static bool menuInitialized = false;
 
         if (!menuInitialized) {
@@ -700,9 +792,9 @@ void playState(
                 sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f - 60),
                 sf::Vector2f(120, 40),
                 "Resume",
-                font,
-                [&isPaused]() {
-                    isPaused = false;
+                gameData.font,
+                [&]() {
+                    gameData.isPaused = false;
                 }
             );
 
@@ -710,12 +802,12 @@ void playState(
                 sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f),
                 sf::Vector2f(120, 40),
                 "Restart",
-                font,
+                gameData.font,
                 [&]() {
-                    isPaused = false;
-                    round = 1;
-                    showPostRoundMenu = false;
-                    startGame(player, blocks, houses, bullets, blockBullets, window, score, round);
+                    gameData.isPaused = false;
+                    gameData.round = 1;
+                    gameData.showPostRoundMenu = false;
+                    gameData.make();
                 }
             );
 
@@ -723,11 +815,11 @@ void playState(
                 sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f + 60),
                 sf::Vector2f(120, 40),
                 "Main Menu",
-                font,
+                gameData.font,
                 [&]() {
-                    gameState = Menu;
-                    showPostRoundMenu = false;
-                    isPaused = false;
+                    menuState = Menu;
+                    gameData.showPostRoundMenu = false;
+                    gameData.isPaused = false;
                 }
             );
 
@@ -737,13 +829,13 @@ void playState(
             menuInitialized = true;
         }
 
-        pauseMenu.handleEvent(event, window);
-        pauseMenu.draw(window);
+        pauseMenu.handleEvent(event, gameData.window);
+        pauseMenu.draw(gameData.window);
     }
 
     // Show Post round menu
-    if (showPostRoundMenu) {
-        static MenuOverlay postRoundMenu(font, "Round " + std::to_string(round) + " Complete!", WINDOW_SIZE);
+    if (gameData.showPostRoundMenu) {
+        static MenuOverlay postRoundMenu(gameData.font, "Round " + std::to_string(gameData.round) + " Complete!", WINDOW_SIZE);
         static bool menuInitialized = false;
 
         if (!menuInitialized) {
@@ -751,12 +843,12 @@ void playState(
                 sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f - 20),
                 sf::Vector2f(120, 40),
                 "Continue",
-                font,
+                gameData.font,
                 [&]() {
-                    round++;
-                    showPostRoundMenu = false;
+                    gameData.round++;
+                    gameData.showPostRoundMenu = false;
                     menuInitialized = false;
-                    startNewRound(player, blocks, houses, bullets, blockBullets, window, round);
+                    startNewRound(gameData);
                 }
             );
 
@@ -764,18 +856,18 @@ void playState(
                 sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f + 40),
                 sf::Vector2f(120, 40),
                 "Save Game",
-                font,
-                []() { /* Save game logic will be implemented by user */ }
+                gameData.font,
+                [&]() { gameData.saveGame(); }
             );
 
             Button menuButton(
                 sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f + 100),
                 sf::Vector2f(120, 40),
                 "Main Menu",
-                font,
+                gameData.font,
                 [&]() {
-                    gameState = Menu;
-                    showPostRoundMenu = false;
+                    menuState = Menu;
+                    gameData.showPostRoundMenu = false;
                     menuInitialized = false;
                 }
             );
@@ -784,12 +876,12 @@ void playState(
                 sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f + 160),
                 sf::Vector2f(120, 40),
                 "Restart",
-                font,
+                gameData.font,
                 [&]() {
-                    round = 1;
-                    showPostRoundMenu = false;
+                    gameData.round = 1;
+                    gameData.showPostRoundMenu = false;
                     menuInitialized = false;
-                    startGame(player, blocks, houses, bullets, blockBullets, window, score, round);
+                    gameData.make();
                 }
             );
 
@@ -797,38 +889,65 @@ void playState(
             postRoundMenu.addButton(saveButton);
             postRoundMenu.addButton(menuButton);
             postRoundMenu.addButton(restartButton);
-            postRoundMenu.setScoreText(font, "Score: " + std::to_string(score));
+            postRoundMenu.setScoreText(gameData.font, "Score: " + std::to_string(gameData.score));
             menuInitialized = true;
         }
 
-        postRoundMenu.handleEvent(event, window);
-        postRoundMenu.draw(window);
+        postRoundMenu.handleEvent(event, gameData.window);
+        postRoundMenu.draw(gameData.window);
+    }
+
+    // Show Game Over menu
+    if (gameData.isGameOver) {
+        static MenuOverlay gameOverMenu(gameData.font, "Game Over!", WINDOW_SIZE);
+        static bool menuInitialized = false;
+
+        if (!menuInitialized) {
+            Button restartButton(
+                sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f - 20),
+                sf::Vector2f(120, 40),
+                "Restart",
+                gameData.font,
+                [&]() {
+                    gameData.isGameOver = false;
+                    gameData.round = 1;
+                    gameData.make();
+                }
+            );
+
+            Button menuButton(
+                sf::Vector2f(WINDOW_SIZE.x / 2.0f - 60, WINDOW_SIZE.y / 2.0f + 40),
+                sf::Vector2f(120, 40),
+                "Main Menu",
+                gameData.font,
+                [&]() {
+                    gameData.isGameOver = false;
+                    menuState = Menu;
+                }
+            );
+
+            gameOverMenu.addButton(restartButton);
+            gameOverMenu.addButton(menuButton);
+            gameOverMenu.setScoreText(gameData.font, "Final Score: " + std::to_string(gameData.score));
+            menuInitialized = true;
+        }
+
+        gameOverMenu.handleEvent(event, gameData.window);
+        gameOverMenu.draw(gameData.window);
     }
 }
 
-void menuState(
-    sf::RenderWindow& window, GameState& gameState,
-    const sf::Event& event, bool& isRunning,
-    Player& player, std::vector<Block>& blocks,
-    std::vector<House>& houses, std::vector<Bullet>& bullets,
-    std::vector<Bullet>& blockBullets, int& score,
-    int& round
+void mainMenuState(
+    GameData& gameData, MainMenuState& mainState,
+    sf::Event& event, bool& isRunning
 ) {
-    sf::Font font;
-    if (!font.loadFromFile("arial.ttf")) return;
-
     Button playButton(
         sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20),
         sf::Vector2f(120, 40),
         "Play",
-        font,
-        [&player, &blocks,
-        &houses, &bullets,
-        &blockBullets, &window,
-        &score, &round,
-        &gameState]() {
-            startGame(player, blocks, houses, bullets, blockBullets, window, score, round);
-            gameState = Play;
+        gameData.font,
+        [&]() {
+            mainState = PlayAndLoad;
         }
     );
 
@@ -836,20 +955,71 @@ void menuState(
         sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. + 40),
         sf::Vector2f(120, 40),
         "Exit",
-        font,
+        gameData.font,
         [&isRunning]() {isRunning = false;}
     );
 
-    sf::Text text("Game Title", font, 55);
+    sf::Text text("Game Title", gameData.font, 55);
     text.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2. - 130, WINDOW_SIZE.y / 2 - 150));
 
-    playButton.handleEvent(event, window);
-    exitButton.handleEvent(event, window);
+    playButton.handleEvent(event, gameData.window);
+    exitButton.handleEvent(event, gameData.window);
 
-    window.clear(sf::Color::Black);
-    playButton.draw(window);
-    exitButton.draw(window);
-    window.draw(text);
+    gameData.window.clear(sf::Color::Black);
+    playButton.draw(gameData.window);
+    exitButton.draw(gameData.window);
+    gameData.window.draw(text);
+}
+
+void playAndLoadState(
+    GameData& gameData, MainMenuState& mainState,
+    sf::Event& event, MenuState& menuState
+) {
+    Button newGameButton(
+        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20 - 60),
+        sf::Vector2f(120, 40),
+        "New Game",
+        gameData.font,
+        [&]() {
+            menuState = Play;
+            // it's done second time cause Player when going back from game
+            // may want to play again, therefore data has to be new
+            gameData.make();
+            mainState = MainMenu;
+        }
+    );
+
+    Button loadGameButton(
+        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20),
+        sf::Vector2f(120, 40),
+        "Load Game",
+        gameData.font,
+        [&]() {
+            menuState = Play;
+            gameData.loadGame();
+            mainState = MainMenu;
+            startNewRound(gameData);
+        }
+    );
+
+    Button backButton(
+        sf::Vector2f(WINDOW_SIZE.x / 2. - 60, WINDOW_SIZE.y / 2. - 20 + 60),
+        sf::Vector2f(120, 40),
+        "Back",
+        gameData.font,
+        [&]() {
+            mainState = MainMenu;
+        }
+    );
+
+    newGameButton.handleEvent(event, gameData.window);
+    loadGameButton.handleEvent(event, gameData.window);
+    backButton.handleEvent(event, gameData.window);
+
+    gameData.window.clear(sf::Color::Black);
+    newGameButton.draw(gameData.window);
+    loadGameButton.draw(gameData.window);
+    backButton.draw(gameData.window);
 }
 
 void centerBlockOnGrid(
@@ -859,15 +1029,13 @@ void centerBlockOnGrid(
 ) {
     if (blocks.empty() || gridColumns <= 0 || gridRows <= 0) return;
 
-    sf::Vector2u windowSize = window.getSize();
-
     sf::Vector2f rectSize = blocks[0].shape.getSize();
 
     float gridWidth = gridColumns * rectSize.x + (gridColumns - 1) * marginX;
     float gridHeight = gridRows * rectSize.y + (gridRows - 1) * marginY;
 
-    float startX = ((windowSize.x - gridWidth) / 2.0f);
-    float startY = ((windowSize.y - gridHeight) / 2.0f) - (windowSize.y - gridHeight) * 0.40;
+    float startX = ((WINDOW_SIZE.x - gridWidth) / 2.0f);
+    float startY = ((WINDOW_SIZE.y - gridHeight) / 2.0f) - (WINDOW_SIZE.y - gridHeight) * 0.40;
 
     int count = 0;
     for (int row = 0; row < gridRows; ++row) {
@@ -891,14 +1059,13 @@ void centerBlockOnGrid(
 void centerHouseOnGrid(std::vector<House>& houses, sf::RenderWindow& window, float marginX) {
     if (houses.empty()) return;
 
-    sf::Vector2u windowSize = window.getSize();
     sf::Vector2f rectSize = houses[0].shape.getSize();
 
     int numHouses = houses.size();
     float largeMargin = marginX * 3;
     float totalWidth = (numHouses * rectSize.x) + ((numHouses - 1) * largeMargin);
-    float startX = (windowSize.x - totalWidth) / 2.0f;
-    float y = windowSize.y * 0.8f;
+    float startX = (WINDOW_SIZE.x - totalWidth) / 2.0f;
+    float y = WINDOW_SIZE.y * 0.8f;
 
     for (int i = 0; i < numHouses; ++i) {
         float x = startX + i * (rectSize.x + largeMargin);
@@ -908,78 +1075,24 @@ void centerHouseOnGrid(std::vector<House>& houses, sf::RenderWindow& window, flo
     }
 }
 
-void startGame(
-    Player& player, std::vector<Block>& blocks,
-    std::vector<House>& houses, std::vector<Bullet>& bullets,
-    std::vector<Bullet>& blockBullets, sf::RenderWindow& window,
-    int& score, int& round
-) {
-    player.currentLives = 2;
-    player.maxLives = 2;
-    player.totalLives = 3;
-    player.isAlive = true;
+void startNewRound(GameData& gameData) {
+    gameData.bullets.clear();
+    gameData.blockBullets.clear();
 
-    player.shape.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
-    player.shape.setOrigin(sf::Vector2f(30.0f, 10.0f));
+    gameData.player.currentLives = std::min(gameData.player.currentLives + 1, gameData.player.maxLives);
+    gameData.player.updateColor();
+    gameData.player.isAlive = true;
+    gameData.player.respawn(gameData.isGameOver);
 
-    player.updateColor();
-
-    round = 1;
-    score = 0;
-
-    houses.clear();
-    blocks.clear();
-    bullets.clear();
-    blockBullets.clear();
-
-    int blockAmount = 50;
-    for (int i = 0; i < blockAmount; i++) {
-        Block block{ sf::RectangleShape(sf::Vector2f(50, 20)) };
-        block.shape.setFillColor(sf::Color::White);
-        blocks.push_back(block);
-    }
-
-    int gridCol = 10;
-    int gridRow = 5;
-    float marginX = 10;
-    float marginY = 15;
-
-    centerBlockOnGrid(
-        blocks, window,
-        gridCol, gridRow,
-        marginX, marginY
-    );
-
-    int houseAmount = 4;
-    for (int i = 0; i < houseAmount; i++) {
-        House house{ sf::RectangleShape(sf::Vector2f(50, 30)) };
-        house.shape.setFillColor(sf::Color::White);
-        houses.push_back(house);
-    }
-
-    centerHouseOnGrid(houses, window, 35.);
-}
-
-void startNewRound(
-    Player& player, std::vector<Block>& blocks,
-    std::vector<House>& houses, std::vector<Bullet>& bullets,
-    std::vector<Bullet>& blockBullets, sf::RenderWindow& window,
-    int round
-) {
-    // Clear existing bullets
-    bullets.clear();
-    blockBullets.clear();
-
-    // Restore some player health as a round bonus
-    player.currentLives = std::min(player.currentLives + 1, player.maxLives);
-    player.updateColor();
+    gameData.graceTimeClock.restart();
 
     // Create blocks with increased health based on round
-    int blockAmount = 50 + (round - 1) * 5; // More blocks each round
+    gameData.blocks.clear();
+    int blockAmount = 50 + (gameData.round - 1) * 3;
     for (int i = 0; i < blockAmount; i++) {
         Block block{ sf::RectangleShape(sf::Vector2f(50, 20)) };
         block.shape.setFillColor(sf::Color::White);
-        blocks.push_back(block);
+        gameData.blocks.push_back(block);
     }
 
     int gridCol = 10;
@@ -988,22 +1101,33 @@ void startNewRound(
     float marginY = 15;
 
     centerBlockOnGrid(
-        blocks, window,
+        gameData.blocks, gameData.window,
         gridCol, gridRow,
         marginX, marginY
     );
 
     // Increase block health based on round
-    for (auto& block : blocks) {
-        block.maxLives += (round - 1);
+    for (auto& block : gameData.blocks) {
+        block.maxLives += (gameData.round - 1);
         block.lives = block.maxLives;
         block.updateColor();
     }
 
-    // Repair houses slightly between rounds
-    for (auto& house : houses) {
-        house.lives = std::min(house.lives + 2, house.maxLives);
-        house.updateColor();
+    // Repair houses slightly between rounds or make new ones
+    if (gameData.houses.size() > 0) {
+        for (auto& house : gameData.houses) {
+            house.lives = std::min(house.lives + 2, house.maxLives);
+            house.updateColor();
+        }
+    } else {
+        int houseAmount = std::min(gameData.round, 4);
+        for (int i = 0; i < houseAmount; i++) {
+            House house{ sf::RectangleShape(sf::Vector2f(50, 30)) };
+            house.shape.setFillColor(sf::Color::White);
+            gameData.houses.push_back(house);
+        }
+
+        centerHouseOnGrid(gameData.houses, gameData.window, 35.);
     }
 }
 
