@@ -242,7 +242,7 @@ struct Player {
             shape.move(sf::Vector2f(dir * speed * deltaTime, 0));
 
             // Player Shooting
-            if (shootClock.getElapsedTime() > sf::seconds(0.5) && sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
+            if (shootClock.getElapsedTime() > sf::seconds(0.45) && sf::Keyboard::isKeyPressed(sf::Keyboard::Space)) {
                 if (bullets.size() < 50) {
                     Bullet bullet{ sf::RectangleShape(sf::Vector2f(5, 15)) };
                     bullet.shape.setPosition(shape.getPosition());
@@ -651,13 +651,17 @@ void playState(
 
             if (!shootableBlocks.empty() && gameData.blockBullets.size() < 50) {
                 int maxAmount = 4;
+
                 if (shootableBlocks.size() < 5) {
                     maxAmount = shootableBlocks.size();
                 }
-                int minAmount = 1;
+
+                int minAmount = 0;
 
                 int randAmount = rand() % (maxAmount - minAmount + 1) + minAmount;
                 int i = 0;
+
+                std::cout << randAmount << std::endl;
 
                 while (i < randAmount) {
                     int randInt = rand() % shootableBlocks.size();
