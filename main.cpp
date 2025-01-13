@@ -132,16 +132,52 @@ enum MainMenuState {
     PlayAndLoad,
 };
 
+class Destroyable {
+protected:
+    sf::ConvexShape shape;
+    int lives;
+    int maxLives;
+public:
+    Destroyable() : lives(0), maxLives(0) {}
+    virtual ~Destroyable() = default;
+
+    virtual void updateColor() = 0;
+    virtual void setShape() = 0;
+
+    void setLives(const int& num) {
+        lives = num;
+    }
+
+    void damage(const int& num) {
+        lives -= num;
+    }
+
+    sf::ConvexShape& getShape() {
+        return shape;
+    }
+
+    int& getLives() {
+        return lives;
+    }
+
+    int& getMaxLives() {
+        return maxLives;
+    }
+};
+
 struct Bullet {
     sf::RectangleShape shape;
 };
 
-struct Ship {
-    sf::ConvexShape shape;
-    int lives = 1;
-    int maxLives = 1;
+class Ship : public Destroyable {
+public:
+    Ship() {
+        lives = 1;
+        maxLives = 1;
+        this->setShape();
+    }
 
-    void updateColor() {
+    void updateColor() override {
         float healthPercent = static_cast<float>(lives) / maxLives;
 
         if (healthPercent == 1.0f) {
@@ -159,7 +195,7 @@ struct Ship {
         }
     }
 
-    void setShape() {
+    void setShape() override {
         sf::ConvexShape convex(12);
         // 50 x 20
         convex.setPoint(0, sf::Vector2f(10, 0));
@@ -175,18 +211,19 @@ struct Ship {
         convex.setPoint(10, sf::Vector2f(50, -5));
         convex.setPoint(11, sf::Vector2f(40, 0));
 
-        // convex.setOrigin(sf::Vector2f(50. / 2., 20. / 2.));
-
         shape = convex;
     }
 };
 
-struct House {
-    sf::ConvexShape shape;
-    int lives = 8;
-    int maxLives = 8;
+class House : public Destroyable {
+public:
+    House() {
+        lives = 8;
+        maxLives = 8;
+        this->setShape();
+    }
 
-    void updateColor() {
+    void updateColor() override {
         float healthPercent = static_cast<float>(lives) / maxLives;
 
         if (healthPercent == 1.0f) {
@@ -204,7 +241,7 @@ struct House {
         }
     }
 
-    void setShape() {
+    void setShape() override {
         sf::ConvexShape convex(8);
         convex.setPoint(0, sf::Vector2f(0, 0));
         convex.setPoint(1, sf::Vector2f(0, -30));
@@ -214,27 +251,38 @@ struct House {
         convex.setPoint(5, sf::Vector2f(40, -10));
         convex.setPoint(6, sf::Vector2f(10, -10));
         convex.setPoint(7, sf::Vector2f(10, 0));
-
-        // convex.setOrigin(sf::Vector2f(50. / 2., 30. / 2.));
         // 50 x 30
 
         shape = convex;
     }
 };
 
-struct Player {
-    sf::ConvexShape shape;
+class Player : public Destroyable {
+private:
     float speed;
+    int totalLives;
 
-    int currentLives = 3;
-    int maxLives = 3;
-    int totalLives = 4;
+    bool isAlive;
+    float respawnTimer;
+    float respawnDelay;
+public:
+    Player() {
+        // Match the original struct's life values
+        lives = 2;        // This was currentLives in the struct
+        maxLives = 2;
+        totalLives = 3;
 
-    bool isAlive = true;
-    float respawnTimer = 0.0f;
-    static constexpr float respawnDelay = 5.0f; // 5 seconds for respawn
+        isAlive = true;
+        respawnTimer = 0.0f;
+        respawnDelay = 5.0f;
 
-    void setShape() {
+        speed = 250.f;
+
+        this->setShape();
+        shape.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2.0f, WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1f)));
+    }
+
+    void setShape() override {
         sf::ConvexShape convex(6);
         convex.setPoint(0, sf::Vector2f(0, 0));
         convex.setPoint(1, sf::Vector2f(0, -10));
@@ -247,13 +295,13 @@ struct Player {
         shape = convex;
     }
 
-    void updateColor() {
+    void updateColor() override {
         if (!isAlive) {
             shape.setFillColor(sf::Color::Transparent);
             return;
         }
 
-        float healthPercent = static_cast<float>(currentLives) / maxLives;
+        float healthPercent = static_cast<float>(lives) / maxLives;
 
         if (healthPercent == 1.0f) {
             shape.setFillColor(sf::Color::White);
@@ -273,11 +321,11 @@ struct Player {
     void respawn(bool& isGameOver) {
         if (totalLives > 0) {
             isAlive = true;
-            currentLives = maxLives;
+            lives = maxLives;
             updateColor();
-            shape.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
+            this->getShape().setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
         } else {
-            isGameOver = true;  // Set game over when no lives left
+            isGameOver = true;
         }
     }
 
@@ -316,6 +364,13 @@ struct Player {
             }
         }
     }
+
+    void setIsAlive(bool b) { isAlive = b; }
+    bool& getIsAlive() { return isAlive; }
+    int& getTotalLives() { return totalLives; }
+    float& getRespawnTimer() { return respawnTimer; }
+    float& getRespawnDelay() { return respawnDelay; }
+    void damageTotalLives(int num) { totalLives -= num; }
 };
 
 // Helper functions
@@ -355,15 +410,11 @@ struct GameData {
     bool isGameOver;
 
     void make() {
-        player.currentLives = 2;
-        player.maxLives = 2;
-        player.totalLives = 3;
-        player.isAlive = true;
+        Player player;
         isGameOver = false;
 
         player.setShape();
-        player.shape.setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
-        player.speed = 250.f;
+        player.getShape().setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
 
         player.updateColor();
         graceTimeClock.restart();
@@ -383,7 +434,7 @@ struct GameData {
         for (int i = 0; i < blockAmount; i++) {
             Ship ship;
             ship.setShape();
-            ship.shape.setFillColor(sf::Color::White);
+            ship.getShape().setFillColor(sf::Color::White);
             ships.push_back(ship);
         }
 
@@ -402,7 +453,7 @@ struct GameData {
         for (int i = 0; i < houseAmount; i++) {
             House house;
             house.setShape();
-            house.shape.setFillColor(sf::Color::White);
+            house.getShape().setFillColor(sf::Color::White);
             houses.push_back(house);
         }
 
@@ -422,15 +473,15 @@ struct GameData {
             outFile << round + 1 << std::endl;
             outFile << score << std::endl;
 
-            outFile << player.currentLives << std::endl;
-            outFile << player.totalLives << std::endl;
+            outFile << player.getLives() << std::endl;
+            outFile << player.getTotalLives() << std::endl;
 
             outFile << houses.size() << std::endl;
-            for (const auto& house : houses) {
-                outFile << house.lives << std::endl;
+            for (auto& house : houses) {
+                outFile << house.getLives() << std::endl;
 
-                outFile << house.shape.getPosition().x << std::endl;
-                outFile << house.shape.getPosition().y << std::endl;
+                outFile << house.getShape().getPosition().x << std::endl;
+                outFile << house.getShape().getPosition().y << std::endl;
             }
             outFile.close();
         }
@@ -447,8 +498,8 @@ struct GameData {
         if (inFile.is_open()) {
             inFile >> round;
             inFile >> score;
-            inFile >> player.currentLives;
-            inFile >> player.totalLives;
+            inFile >> player.getLives();
+            inFile >> player.getTotalLives();
 
             size_t houseSize;
             inFile >> houseSize;
@@ -462,11 +513,11 @@ struct GameData {
 
                     sf::Vector2f pos(0.0, 0.0);
 
-                    inFile >> house.lives;
+                    inFile >> house.getLives();
                     inFile >> pos.x;
                     inFile >> pos.y;
 
-                    house.shape.setPosition(pos);
+                    house.getShape().setPosition(pos);
                     house.updateColor();
 
                     houses.push_back(house);
@@ -551,7 +602,7 @@ void playState(
     GameData& gameData, sf::Event& event,
     float dt, MenuState& menuState
 ) {
-    sf::Text livesText = updateLivesText(gameData.font, gameData.player.totalLives);
+    sf::Text livesText = updateLivesText(gameData.font, gameData.player.getTotalLives());
     sf::Text scoreText = updateScoreText(gameData.font, gameData.score);
 
     sf::Text roundText("Round: " + std::to_string(gameData.round), gameData.font, 20);
@@ -592,14 +643,14 @@ void playState(
             bool bulletHit = false;
             for (int blockId = 0; blockId < gameData.ships.size(); blockId++) {
                 sf::FloatRect bulletBounds = gameData.bullets[bulletId].shape.getGlobalBounds();
-                sf::FloatRect blockBounds = gameData.ships[blockId].shape.getGlobalBounds();
+                sf::FloatRect blockBounds = gameData.ships[blockId].getShape().getGlobalBounds();
 
                 if (bulletBounds.intersects(blockBounds)) {
-                    if (gameData.ships[blockId].lives <= 0) {
+                    if (gameData.ships[blockId].getLives() <= 0) {
                         gameData.ships.erase(gameData.ships.begin() + blockId);
                         gameData.score += 50;
                     } else {
-                        gameData.ships[blockId].lives--;
+                        gameData.ships[blockId].damage(1);
                         gameData.ships[blockId].updateColor();
                         gameData.score += 10;
                     }
@@ -620,13 +671,13 @@ void playState(
             bool bulletHit = false;
             for (int houseId = 0; houseId < gameData.houses.size(); houseId++) {
                 sf::FloatRect bulletBounds = gameData.bullets[bulletId].shape.getGlobalBounds();
-                sf::FloatRect houseBounds = gameData.houses[houseId].shape.getGlobalBounds();
+                sf::FloatRect houseBounds = gameData.houses[houseId].getShape().getGlobalBounds();
 
                 if (bulletBounds.intersects(houseBounds)) {
-                    if (gameData.houses[houseId].lives == 0) {
+                    if (gameData.houses[houseId].getLives() == 0) {
                         gameData.houses.erase(gameData.houses.begin() + houseId);
                     } else {
-                        gameData.houses[houseId].lives--;
+                        gameData.houses[houseId].damage(1);
                         gameData.houses[houseId].updateColor();
                     }
                     bulletHit = true;
@@ -646,13 +697,13 @@ void playState(
         if (gameData.graceTimeClock.getElapsedTime() > sf::seconds(1.)) {
             // Get ships that can shoot
             for (auto& block : gameData.ships) {
-                sf::FloatRect blockBounds = block.shape.getGlobalBounds();
+                sf::FloatRect blockBounds = block.getShape().getGlobalBounds();
                 bool hasBlockBelow = false;
 
                 for (auto& otherBlock : gameData.ships) {
                     if (&block == &otherBlock) continue;
 
-                    sf::FloatRect otherBlockBounds = otherBlock.shape.getGlobalBounds();
+                    sf::FloatRect otherBlockBounds = otherBlock.getShape().getGlobalBounds();
 
                     if (blockBounds.left == otherBlockBounds.left &&
                         blockBounds.top + blockBounds.height + 15 /*MarginX*/ == otherBlockBounds.top) {
@@ -682,9 +733,9 @@ void playState(
         if (gameData.moveClock.getElapsedTime() > sf::seconds(2.0 - harder)) {
             for (auto& block : gameData.ships) {
                 if (harder > 0.3) {
-                    block.shape.move(sf::Vector2f(0.0, 3.0));
+                    block.getShape().move(sf::Vector2f(0.0, 3.0));
                 } else {
-                    block.shape.move(sf::Vector2f(0.0, 1.0));
+                    block.getShape().move(sf::Vector2f(0.0, 1.0));
                 }
             }
             gameData.moveClock.restart();
@@ -718,10 +769,10 @@ void playState(
                 }
 
                 for (const auto& id : shootBlockId) {
-                    const Ship& shootBlock = shootableBlocks[id];
+                    Ship& shootBlock = shootableBlocks[id];
                     Bullet bullet{ sf::RectangleShape(sf::Vector2f(5, 15)) };
 
-                    sf::Vector2f blockCenter = shootBlock.shape.getPosition() +
+                    sf::Vector2f blockCenter = shootBlock.getShape().getPosition() +
                         sf::Vector2f(50. / 2.f, 20.);
 
                     bullet.shape.setPosition(blockCenter);
@@ -737,7 +788,7 @@ void playState(
 
         // Check if ShootableBlocks are under certain position
         for (auto& block : shootableBlocks) {
-            if (block.shape.getPosition().y >= WINDOW_SIZE.y * 0.71) {
+            if (block.getShape().getPosition().y >= WINDOW_SIZE.y * 0.71) {
                 gameData.isGameOver = true;
             }
         }
@@ -758,13 +809,13 @@ void playState(
             bool bulletHit = false;
             for (int houseId = 0; houseId < gameData.houses.size(); houseId++) {
                 sf::FloatRect bulletBounds = gameData.blockBullets[bulletId].shape.getGlobalBounds();
-                sf::FloatRect houseBounds = gameData.houses[houseId].shape.getGlobalBounds();
+                sf::FloatRect houseBounds = gameData.houses[houseId].getShape().getGlobalBounds();
 
                 if (bulletBounds.intersects(houseBounds)) {
-                    if (gameData.houses[houseId].lives == 0) {
+                    if (gameData.houses[houseId].getLives() == 0) {
                         gameData.houses.erase(gameData.houses.begin() + houseId);
                     } else {
-                        gameData.houses[houseId].lives--;
+                        gameData.houses[houseId].damage(1);
                         gameData.houses[houseId].updateColor();
                     }
                     bulletHit = true;
@@ -783,16 +834,16 @@ void playState(
         for (int bulletId = 0; bulletId < gameData.blockBullets.size();) {
             bool bulletHit = false;
             sf::FloatRect bulletBounds = gameData.blockBullets[bulletId].shape.getGlobalBounds();
-            sf::FloatRect playerBounds = gameData.player.shape.getGlobalBounds();
+            sf::FloatRect playerBounds = gameData.player.getShape().getGlobalBounds();
 
-            if (bulletBounds.intersects(playerBounds) && gameData.player.isAlive) {
-                gameData.player.currentLives--;
+            if (bulletBounds.intersects(playerBounds) && gameData.player.getIsAlive()) {
+                gameData.player.damage(1);
                 gameData.player.updateColor();
 
-                if (gameData.player.currentLives <= 0) {
-                    gameData.player.totalLives--;
-                    gameData.player.isAlive = false;
-                    gameData.player.respawnTimer = 0.0f;
+                if (gameData.player.getLives() <= 0) {
+                    gameData.player.damageTotalLives(1);
+                    gameData.player.getIsAlive() = false;
+                    gameData.player.getRespawnTimer() = 0.0f;
                 }
 
                 bulletHit = true;
@@ -829,14 +880,14 @@ void playState(
     }
 
     for (auto block : gameData.ships) {
-        gameData.window.draw(block.shape);
+        gameData.window.draw(block.getShape());
     }
 
     for (auto house : gameData.houses) {
-        gameData.window.draw(house.shape);
+        gameData.window.draw(house.getShape());
     }
 
-    gameData.window.draw(gameData.player.shape);
+    gameData.window.draw(gameData.player.getShape());
 
     // show Pause menu
     if (gameData.isPaused) {
@@ -860,9 +911,14 @@ void playState(
                 "Restart",
                 gameData.font,
                 [&]() {
-                    gameData.isPaused = false;
+                    gameData.isGameOver = false;
+                    gameData.player.getTotalLives() = 3;
+                    gameData.player.setIsAlive(true);
+                    gameData.player.getLives() = gameData.player.getMaxLives();
+                    gameData.player.updateColor();
                     gameData.round = 1;
-                    gameData.showPostRoundMenu = false;
+                    gameData.player.getShape().setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
+                    gameData.isPaused = false;
                     gameData.make();
                 }
             );
@@ -934,9 +990,15 @@ void playState(
                 "Restart",
                 gameData.font,
                 [&]() {
+                    gameData.isGameOver = false;
+                    gameData.player.respawn(gameData.isGameOver);
+
+                    // gameData.player.getTotalLives() = 3;
+                    // gameData.player.setIsAlive(true);
+                    // gameData.player.getLives() = gameData.player.getMaxLives();
+                    // gameData.player.updateColor();
                     gameData.round = 1;
                     gameData.showPostRoundMenu = false;
-                    menuInitialized = false;
                     gameData.make();
                 }
             );
@@ -966,7 +1028,12 @@ void playState(
                 gameData.font,
                 [&]() {
                     gameData.isGameOver = false;
+                    gameData.player.getTotalLives() = 3;
+                    gameData.player.setIsAlive(true);
+                    gameData.player.getLives() = gameData.player.getMaxLives();
+                    gameData.player.updateColor();
                     gameData.round = 1;
+                    gameData.player.getShape().setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
                     gameData.make();
                 }
             );
@@ -1155,9 +1222,9 @@ void centerBlockOnGrid(
             float x = startX + col * (rectSize.x + marginX);
             float y = startY + row * (rectSize.y + marginY);
 
-            ships[count].shape.setPosition(x, y);
-            ships[count].lives = livesForRow;
-            ships[count].maxLives = livesForRow;
+            ships[count].getShape().setPosition(x, y);
+            ships[count].getLives() = livesForRow;
+            ships[count].getMaxLives() = livesForRow;
             ships[count].updateColor();
             ++count;
         }
@@ -1178,7 +1245,7 @@ void centerHouseOnGrid(std::vector<House>& houses, sf::RenderWindow& window, flo
 
     for (int i = 0; i < numHouses; ++i) {
         float x = startX + i * (rectSize.x + largeMargin);
-        houses[i].shape.setPosition(x, y);
+        houses[i].getShape().setPosition(x, y);
 
         houses[i].updateColor();
     }
@@ -1188,9 +1255,9 @@ void startNewRound(GameData& gameData) {
     gameData.bullets.clear();
     gameData.blockBullets.clear();
 
-    gameData.player.currentLives = std::min(gameData.player.currentLives + 1, gameData.player.maxLives);
+    gameData.player.getLives() = std::min(gameData.player.getLives() + 1, gameData.player.getMaxLives());
     gameData.player.updateColor();
-    gameData.player.isAlive = true;
+    gameData.player.setIsAlive(true);
     gameData.player.respawn(gameData.isGameOver);
 
     gameData.graceTimeClock.restart();
@@ -1201,7 +1268,7 @@ void startNewRound(GameData& gameData) {
     for (int i = 0; i < shipsAmount; i++) {
         Ship ship;
         ship.setShape();
-        ship.shape.setFillColor(sf::Color::White);
+        ship.getShape().setFillColor(sf::Color::White);
         gameData.ships.push_back(ship);
     }
 
@@ -1218,15 +1285,15 @@ void startNewRound(GameData& gameData) {
 
     // Increase block health based on round
     for (auto& block : gameData.ships) {
-        block.maxLives += (gameData.round - 1);
-        block.lives = block.maxLives;
+        block.getMaxLives() += (gameData.round - 1);
+        block.getLives() = block.getMaxLives();
         block.updateColor();
     }
 
     // Repair houses slightly between rounds or make new ones
     if (gameData.houses.size() > 0) {
         for (auto& house : gameData.houses) {
-            house.lives = std::min(house.lives + 2, house.maxLives);
+            house.getLives() = std::min(house.getLives() + 2, house.getMaxLives());
             house.updateColor();
         }
     } else {
@@ -1234,7 +1301,7 @@ void startNewRound(GameData& gameData) {
         for (int i = 0; i < houseAmount; i++) {
             House house;
             house.setShape();
-            house.shape.setFillColor(sf::Color::White);
+            house.getShape().setFillColor(sf::Color::White);
             gameData.houses.push_back(house);
         }
 
