@@ -410,11 +410,14 @@ struct GameData {
     bool isGameOver;
 
     void make() {
-        Player player;
+        // Player player;
         isGameOver = false;
 
         player.setShape();
         player.getShape().setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
+        player.getTotalLives() = 3;
+
+        player.respawn(isGameOver);
 
         player.updateColor();
         graceTimeClock.restart();
@@ -911,13 +914,6 @@ void playState(
                 "Restart",
                 gameData.font,
                 [&]() {
-                    gameData.isGameOver = false;
-                    gameData.player.getTotalLives() = 3;
-                    gameData.player.setIsAlive(true);
-                    gameData.player.getLives() = gameData.player.getMaxLives();
-                    gameData.player.updateColor();
-                    gameData.round = 1;
-                    gameData.player.getShape().setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
                     gameData.isPaused = false;
                     gameData.make();
                 }
@@ -990,14 +986,6 @@ void playState(
                 "Restart",
                 gameData.font,
                 [&]() {
-                    gameData.isGameOver = false;
-                    gameData.player.respawn(gameData.isGameOver);
-
-                    // gameData.player.getTotalLives() = 3;
-                    // gameData.player.setIsAlive(true);
-                    // gameData.player.getLives() = gameData.player.getMaxLives();
-                    // gameData.player.updateColor();
-                    gameData.round = 1;
                     gameData.showPostRoundMenu = false;
                     gameData.make();
                 }
@@ -1027,13 +1015,6 @@ void playState(
                 "Restart",
                 gameData.font,
                 [&]() {
-                    gameData.isGameOver = false;
-                    gameData.player.getTotalLives() = 3;
-                    gameData.player.setIsAlive(true);
-                    gameData.player.getLives() = gameData.player.getMaxLives();
-                    gameData.player.updateColor();
-                    gameData.round = 1;
-                    gameData.player.getShape().setPosition(sf::Vector2f(WINDOW_SIZE.x / 2., WINDOW_SIZE.y - (WINDOW_SIZE.y * 0.1)));
                     gameData.make();
                 }
             );
